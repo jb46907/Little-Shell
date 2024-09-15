@@ -104,38 +104,42 @@ int lsh_exit(char **args)
 }
 
 
-int lsh_echo(char **args)
-{
-  if (args[1] == NULL) {
-    fprintf(stderr, "lsh: expected argument to \"echo\"\n");
-  } else {
+int lsh_echo(char **args) {
     for (int i = 1; args[i] != NULL; i++) {
-      printf("%s ", args[i]);
+        printf("%s ", args[i]);
     }
     printf("\n");
-  }
-  return 1;
+    return 1;
 }
 
+
 int lsh_pwd(char **args) {
-    char cwd[4096];  // Buffer to store the current working directory
-    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    char *cwd = getcwd(NULL, 0);  // Dynamically allocate memory for path
+    if (cwd != NULL) {
         printf("%s\n", cwd);
+        free(cwd);  // Free the memory
     } else {
         perror("getcwd() error");
     }
     return 1;
 }
 
+
 int lsh_whoami(char **args) {
     char *username = getlogin();
-    if (username != NULL) {
-        printf("%s\n", username);
-    } else {
-        perror("getlogin() error");
+    if (username == NULL) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) {
+            username = pw->pw_name;
+        } else {
+            perror("lsh: whoami");
+            return 1;
+        }
     }
+    printf("%s\n", username);
     return 1;
 }
+
 
 int lsh_touch(char **args){
   FILE* f;
@@ -188,6 +192,7 @@ int lsh_launch(char **args)
   } else if (pid < 0) {
     // Error forking
     perror("lsh");
+    return 1;  // Continue the shell after the error
   } else {
     // Parent process
     do {
@@ -338,6 +343,10 @@ void lsh_loop(void)
   } while (status);
 }
 
+void sigint_handler(int sig) {
+    printf("\nCaught signal %d. Use 'exit' to quit the shell.\n", sig);
+}
+
 /**
    @brief Main entry point.
    @param argc Argument count.
@@ -348,6 +357,8 @@ int main(int argc, char **argv)
 {
   // Load config files, if any.
 
+  // Register the signal handler
+  signal(SIGINT, sigint_handler);
   // Run command loop.
   lsh_loop();
 
